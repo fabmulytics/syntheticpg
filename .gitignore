@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.log
+*.sqlite3
+*.db
+*.env
+.env*
+.venv/
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Docker
+*.pid
+docker-compose.override.yml
+
+# Test/coverage
+.coverage
+htmlcov/
+*.cover
+*.pyc
+.cache/
+
+# Misc
+*.swp
+*.bak
+*.tmp
+
+# Ignore bronze_hash_pg.egg-info
+src/bronze_hash_pg.egg-info/
