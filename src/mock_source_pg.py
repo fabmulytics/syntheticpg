@@ -89,33 +89,36 @@ class MockSourcePg:
         })
 
     def _write_df(self, df: pl.DataFrame, table: str, pk: tuple[str,str] | None) -> None:
-        pdf: pd.DataFrame = df.to_pandas(use_pyarrow_extension_array=True)
+
+        pdf: pd.DataFrame = df.to_pandas()  # drop use_pyarrow_extension_array for simplicity
         schema = self.schema
         fqtn = f'"{schema}"."{table}"'
         cols = [f'"{c}"' for c in pdf.columns]
         col_csv = ", ".join(cols)
 
         with self.engine.begin() as con:
-            # Create table (first run) by writing empty frame
-            pdf.head(0).to_sql(table, con.connection, schema=schema, if_exists="append", index=False)
+            # 1) Ensure base table exists (use SQLAlchemy Connection, NOT raw DBAPI)
+            pdf.head(0).to_sql(table, con, schema=schema, if_exists="append", index=False)
 
-            # Stage in temp table
-            temp = f'"{schema}"."_{table}_stage"'
-            con.execute(text(f"DROP TABLE IF EXISTS {temp};"))
+            # 2) Create TEMP staging table (NO schema qualification for temp)
+            temp = f'_{table}_stage'
+            con.execute(text(f'DROP TABLE IF EXISTS {temp};'))
             con.execute(text(f'CREATE TEMP TABLE {temp} AS SELECT {col_csv} FROM {fqtn} WHERE FALSE;'))
-            pdf.to_sql(f"_{table}_stage", con.connection, schema=schema, if_exists="append", index=False)
 
+            # 3) Load into temp (again: pass SQLAlchemy Connection; do NOT pass schema for temp)
+            pdf.to_sql(temp, con, if_exists="append", index=False)
+
+            # 4) Optional: add PK once for bronze-hash
             if pk:
                 pk_name = f'pk_{schema}_{table}'
-                # Add PK if missing
                 con.execute(text(f"""
                     DO $$
                     BEGIN
                         IF NOT EXISTS (
-                          SELECT 1 FROM pg_constraint WHERE conname = '{pk_name}'
+                            SELECT 1 FROM pg_constraint WHERE conname = '{pk_name}'
                         ) THEN
-                          ALTER TABLE {fqtn} ADD CONSTRAINT {pk_name}
-                          PRIMARY KEY ("{pk[0]}","{pk[1]}");
+                            ALTER TABLE {fqtn}
+                            ADD CONSTRAINT {pk_name} PRIMARY KEY ("{pk[0]}","{pk[1]}");
                         END IF;
                     END$$;
                 """))
@@ -125,5 +128,5 @@ class MockSourcePg:
                     ON CONFLICT ("{pk[0]}","{pk[1]}") DO NOTHING;
                 """))
             else:
-                # plain append for raw bronze
                 con.execute(text(f'INSERT INTO {fqtn} ({col_csv}) SELECT {col_csv} FROM {temp};'))
+

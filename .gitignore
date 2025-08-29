@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+*/__pycache__
 *.py[cod]
 *.pyo
 *.pyd
@@ -12,7 +13,6 @@ build/
 *.sqlite3
 *.db
 *.env
-.env*
 .venv/
 
 # VS Code
